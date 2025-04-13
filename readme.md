@@ -9,7 +9,7 @@ Hello world:
 ```
 include {println} from system;
 
-let main = fn()=>{
+let main = ||{
     println("Hello World!");
 }
 ```
@@ -19,11 +19,11 @@ Adding numbers
 ```
 include {println} from system;
 
-let add = fn(a:i32, b:i32):i32 =>{
+let add = |a:i32, b:i32|:i32 {
     a + b // Like rust, the last expression in a function body is returned automatically.
 }
 
-let main = fn()=>{
+let main = ||{
     println(add(5, 7));
 }
 ```
@@ -36,13 +36,13 @@ include {println} from system;
 * Doc strings! Document your code!
 * This is a function that calculates Fibonacci numbers.
 */
-let fib = fn(n: i32):i32 => {
+let fib = |n: i32|:i32 {
     if n < 0 {0}
     else if n < 2 {1}
     else {fib(n-1)+fib(n-2)}
 }
 
-let main = fn()=>{
+let main = ||{
     for i in 0..10{ // use of range operator. The implicit type of i is u64
         println(f"fib of {i} is {fib(i)}"); // F strings for formatting, like Python
     }
@@ -60,15 +60,17 @@ struct Vec2{
     y: i32,
 }
 
-let Vec2::new = fn(x: i32, y: i32): Self => {
+// Attach a static method to Vec2
+let Vec2::new = |x: i32, y: i32|: Self {
     Self{x, y}
 }
-let `+` = fn(self: Vec2, v: Vec2)=>{ 
+// Attach a magic instance method
+let Vec2:__add__ = |self: Vec2, v: Vec2|{ 
     // Create or overload infix/unary operators.
     // It's a powerful tool, don't abuse it.
     Vec2::new(self.x + v.x, self.y + v.y) // Create a new vector2, leaving the two originals untouched.
 }
-let normalize = fn(self: Vec2) =>{
+let Vec2:normalize = |self: Vec2|{
     // Normalize a vector in place
     let len = sqrt(self.x * self.x + self.y*self.y);
     self.x /= len;
@@ -76,15 +78,15 @@ let normalize = fn(self: Vec2) =>{
     self
 }
 
-let to_str = fn(self: Vec2) => {
+let Vec2:__str__ = |self: Vec2| {
     f"x: {self.x}, y: {self.y}"
 }
 
-let main = fn()=>{
+let main = ||{
     let a = Vec2::new(1, 1);
     let b = Vec2::new(3, 1);
     let c = a + b;
-    println(c);
+    println(c:normalize());
 }
 
 ```

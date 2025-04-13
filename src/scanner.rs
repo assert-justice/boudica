@@ -1,4 +1,4 @@
-use crate::common::{Op, Token, TokenType, Value};
+use crate::common::{Keyword, Op, Token, TokenType, Value};
 use crate::bo_error::BoError;
 
 #[derive(Default)]
@@ -94,9 +94,25 @@ impl Scanner{
                 if self.is_next('='){Op::TildeEqual}
                 else {Op::Tilde}
             },
-            '.' => Op::Stop,
+            '.' => {
+                if self.is_next('.'){Op::StopStop}
+                else {Op::Stop}
+            },
+            '|' => {
+                if self.is_next('|'){Op::PipePipe}
+                else if self.is_next('='){Op::PipeEqual}
+                else {Op::Pipe}
+            },
+            '&' => {
+                if self.is_next('&'){Op::AndAnd}
+                else if self.is_next('='){Op::AndEqual}
+                else {Op::And}
+            },
             ',' => Op::Comma,
-            ':' => Op::Colon,
+            ':' => {
+                if self.is_next(':'){Op::ColonColon}
+                else {Op::Colon}
+            },
             ';' => Op::Semicolon,
             '(' => Op::LeftParen,
             ')' => Op::RightParen,
@@ -148,15 +164,36 @@ impl Scanner{
         self.add_literal(Value::String(lit));
         true
     }
+    fn add_keyword(&mut self, keyword: Keyword){
+        self.add_token(TokenType::Keyword(keyword));
+    }
     fn is_identifier(&mut self) -> bool{
         if self.peek() != '_' && !self.peek().is_alphabetic(){return false;}
         while self.peek().is_alphanumeric() {
             self.advance();
         }
         let lit = self.src[self.start..self.current].iter().collect::<String>();
-        if lit == "true"{self.add_literal(Value::Bool(true));}
-        else if lit == "false"{self.add_literal(Value::Bool(false));}
-        else {self.add_token(TokenType::Identifier(lit));}
+        let lit = lit.as_str();
+        match lit {
+            "true"=>{self.add_literal(Value::Bool(true));},
+            "false"=>{self.add_literal(Value::Bool(false));},
+            "let"=>{self.add_keyword(Keyword::Let);}
+            "pub"=>{self.add_keyword(Keyword::Pub);}
+            "struct"=>{self.add_keyword(Keyword::Struct);}
+            "import"=>{self.add_keyword(Keyword::Import);}
+            "from"=>{self.add_keyword(Keyword::From);}
+            "if"=>{self.add_keyword(Keyword::If);}
+            "else"=>{self.add_keyword(Keyword::Else);}
+            "while"=>{self.add_keyword(Keyword::While);}
+            "loop"=>{self.add_keyword(Keyword::Loop);}
+            "break"=>{self.add_keyword(Keyword::Break);}
+            "continue"=>{self.add_keyword(Keyword::Continue);}
+            "return"=>{self.add_keyword(Keyword::Return);}
+            _ =>{self.add_token(TokenType::Identifier(lit.to_string()));}
+        }
+        // if lit == "true"{self.add_literal(Value::Bool(true));}
+        // else if lit == "false"{self.add_literal(Value::Bool(false));}
+        // else {self.add_token(TokenType::Identifier(lit));}
         true
     }
     // fn is_char(&mut self) -> bool{}
