@@ -9,8 +9,10 @@ pub enum Statement{
     Assignment(Expression, Expression),// first expr must be assignable
     Let(String, Expression),
     Return(Option<Expression>),
-    Loop(Expression), // expects block expression
+    Loop(Box<Statement>), // expects block expression
     While(Expression, Expression), // expects conditional and block expressions
+    If(Expression, Box<Statement>, Box<Statement>), // if, then, else
+    Block(Vec<Statement>),
     None,
 }
 #[derive(Debug)]
@@ -18,9 +20,10 @@ pub enum Expression {
     Literal(Value),
     Unary(Op,Box<Expression>),
     Binary(Op,Box<Expression>,Box<Expression>), // operation, left, right
-    If(Box<Expression>,Box<Expression>,Box<Expression>), // if, then, else
+    // If(Box<Expression>,Box<Expression>,Box<Expression>), // if, then, else
     Assignable(Box<Expression>),
-    Block(Vec<Statement>, Option<Box<Expression>>),
+    // Block(Vec<Statement>),
+    // Block(Vec<Statement>, Option<Box<Expression>>), // vec of statements with optional trailing expression
     Array(Vec<Expression>),
     None,
 }
@@ -53,77 +56,97 @@ impl Parser {
         self.error = Some(e.clone());
         e
     }
-    fn peek(&self) -> Token{
-        self.tokens[self.current].clone()
+    fn peek(&self) -> Option<Token>{
+        self.tokens.get(self.current).cloned()
     }
-    fn previous(&self) -> Token{
-        self.tokens[self.current-1].clone()
+    fn previous(&self) -> Option<Token>{
+        self.tokens.get(self.current-1).cloned()
     }
-    fn advance(&mut self) -> Token{
+    fn advance(&mut self) -> Option<Token>{
         let t = self.peek();
-        self.current += 1;
-        t
+        if let Some(t) = t{
+            self.current += 1;
+            Some(t)
+        }
+        else{
+            None
+        }
     }
-    fn match_type(&mut self, token_type: TokenType) -> bool{
-        if token_type != self.peek().token_type {return false;}
-        self.advance();
-        true
-    }
+    // fn match_type(&mut self, token_type: TokenType) -> bool{
+    //     if token_type != self.peek().token_type {return false;}
+    //     self.advance();
+    //     true
+    // }
     fn match_op(&mut self, op: Op) -> bool{
-        match self.peek().token_type{
-            TokenType::Op(o)=>{self.advance(); o == op},
-            _ => {false}
+        if let Some(t) = self.peek() {
+            match t.token_type{
+                TokenType::Op(o)=>{self.advance(); o == op},
+                _ => {false}
+            }
+        }
+        else {
+            false
         }
     }
-    fn match_keyword(&mut self, keyword: Keyword) -> bool{
-        match self.peek().token_type{
-            TokenType::Keyword(kw)=>{self.advance(); kw == keyword},
-            _ => {false}
-        }
-    }
+    // fn match_keyword(&mut self, keyword: Keyword) -> bool{
+    //     if let Some(t) = self.peek() {
+    //         match t.token_type{
+    //             TokenType::Keyword(kw)=>{self.advance(); kw == keyword},
+    //             _ => {false}
+    //         }
+    //     }
+    //     else {
+    //         false
+    //     }
+    // }
     fn expression(&mut self) -> Expression{
         self.primary()
     }
     fn primary(&mut self) -> Expression{
-        let t = self.advance();
+        let t = self.advance().unwrap();
         if let Some(v) = t.is_value() {
             return Expression::Literal(v);
         }
         self.set_err(t, "Expected literal");
         Expression::None
     }
-    fn block(&mut self)->Expression{
-        //
+    fn block(&mut self)->Statement{
+        self.advance(); //consume {
+        let mut statements = Vec::new();
+        while !self.match_op(Op::RightBrace) && !self.at_eof() {
+            statements.push(self.statement());
+        }
+        self.advance(); //consume }
+        Statement::Block(statements)
     }
     fn top_statement(&mut self){
         let stmt = self.statement();
         self.module.statements.push(stmt);
         if !self.match_op(Op::Semicolon){
-            self.set_err(self.previous(), "Expected semicolon");
+            self.set_err(self.previous().unwrap(), "Expected semicolon");
         }
     }
     fn let_statement(&mut self)->Statement{
         // consume let
         self.advance();
         // get identifier
-        let ident = self.advance();
+        let ident = self.advance().unwrap();
         if let Some(s) = ident.is_ident() {
             // consume equals
             if !self.match_op(Op::Equal){
-                self.set_err(self.peek(),"Expected equals sign");
+                self.set_err(self.peek().unwrap(),"Expected equals sign");
                 return Statement::None;
             }
             // parse expression
             let expr = self.expression();
             return Statement::Let(s, expr);
         }
-        self.set_err(self.peek(),"Expected identifier");
+        self.set_err(self.peek().unwrap(),"Expected identifier");
         Statement::None
     }
     fn return_statement(&mut self)->Statement{
-        // consume return keyword
-        self.advance();
-        let next = self.peek();
+        self.advance(); // consume return keyword
+        let next = self.peek().unwrap();
         if let Some(op) = next.is_op() {
             if op == Op::Semicolon {return Statement::Return(None);}
         }
@@ -131,16 +154,17 @@ impl Parser {
         Statement::Return(Some(expr))
     }
     fn loop_statement(&mut self)->Statement{
-        // consume loop keyword
-        self.advance();
+        self.advance(); // consume loop keyword
+        Statement::Loop(Box::new(self.block()))
     }
     fn statement(&mut self) -> Statement{
-        let t = self.peek();
+        let t = self.peek().unwrap();
         // let return loop while
         if let Some(kw) = t.is_keyword() {
             match kw {
                 Keyword::Let=>{self.let_statement()},
                 Keyword::Return=>{self.return_statement()},
+                Keyword::Loop=>{self.loop_statement()},
                 _ => {panic!("at the disco");}
             }
         }
