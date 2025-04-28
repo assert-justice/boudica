@@ -6,7 +6,7 @@ mod common;
 mod bo_error;
 
 pub fn temp(){
-    let src = "loop{};";
+    let src = "loop{if 10{let a = 5;}else{let a = 10;};};";
     let res = scanner::Scanner::scan(src);
     let tokens = match res {
         Ok(ts)=>{ts},

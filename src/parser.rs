@@ -10,8 +10,8 @@ pub enum Statement{
     Let(String, Expression),
     Return(Option<Expression>),
     Loop(Box<Statement>), // expects block expression
-    While(Expression, Expression), // expects conditional and block expressions
-    If(Expression, Box<Statement>, Box<Statement>), // if, then, else
+    While(Expression, Box<Statement>), // expects conditional and block expressions
+    If(Expression, Box<Statement>, Box<Option<Statement>>), // if, then, else
     Block(Vec<Statement>),
     None,
 }
@@ -20,10 +20,7 @@ pub enum Expression {
     Literal(Value),
     Unary(Op,Box<Expression>),
     Binary(Op,Box<Expression>,Box<Expression>), // operation, left, right
-    // If(Box<Expression>,Box<Expression>,Box<Expression>), // if, then, else
     Assignable(Box<Expression>),
-    // Block(Vec<Statement>),
-    // Block(Vec<Statement>, Option<Box<Expression>>), // vec of statements with optional trailing expression
     Array(Vec<Expression>),
     None,
 }
@@ -88,17 +85,17 @@ impl Parser {
             false
         }
     }
-    // fn match_keyword(&mut self, keyword: Keyword) -> bool{
-    //     if let Some(t) = self.peek() {
-    //         match t.token_type{
-    //             TokenType::Keyword(kw)=>{self.advance(); kw == keyword},
-    //             _ => {false}
-    //         }
-    //     }
-    //     else {
-    //         false
-    //     }
-    // }
+    fn match_keyword(&mut self, keyword: Keyword) -> bool{
+        if let Some(t) = self.peek() {
+            match t.token_type{
+                TokenType::Keyword(kw)=>{self.advance(); kw == keyword},
+                _ => {false}
+            }
+        }
+        else {
+            false
+        }
+    }
     fn expression(&mut self) -> Expression{
         self.primary()
     }
@@ -116,15 +113,11 @@ impl Parser {
         while !self.match_op(Op::RightBrace) && !self.at_eof() {
             statements.push(self.statement());
         }
-        self.advance(); //consume }
         Statement::Block(statements)
     }
     fn top_statement(&mut self){
         let stmt = self.statement();
         self.module.statements.push(stmt);
-        if !self.match_op(Op::Semicolon){
-            self.set_err(self.previous().unwrap(), "Expected semicolon");
-        }
     }
     fn let_statement(&mut self)->Statement{
         // consume let
@@ -157,21 +150,47 @@ impl Parser {
         self.advance(); // consume loop keyword
         Statement::Loop(Box::new(self.block()))
     }
+    fn while_statement(&mut self) -> Statement{
+        self.advance(); // consume while keyword
+        let condition = self.expression();
+        let stmt = Box::new(self.block());
+        Statement::While(condition, stmt)
+    }
+    fn if_statement(&mut self) -> Statement{
+        self.advance(); // consume if keyword
+        let condition = self.expression();
+        let then = Box::new(self.block());
+        let mut _else = if self.match_keyword(Keyword::Else){
+            Some(self.block())
+        }
+        else{
+            None
+        };
+        Statement::If(condition, then, Box::new(_else))
+
+    }
     fn statement(&mut self) -> Statement{
         let t = self.peek().unwrap();
         // let return loop while
-        if let Some(kw) = t.is_keyword() {
+        let res = if let Some(kw) = t.is_keyword() {
             match kw {
                 Keyword::Let=>{self.let_statement()},
                 Keyword::Return=>{self.return_statement()},
                 Keyword::Loop=>{self.loop_statement()},
+                Keyword::While=>{self.while_statement()},
+                Keyword::If=>{self.if_statement()},
                 _ => {panic!("at the disco");}
             }
         }
         else{
             let expr = self.expression();
             Statement::Expr(expr)
+        };
+        if !self.match_op(Op::Semicolon){
+            self.set_err(self.previous().unwrap(), "Expected semicolon");
+            return Statement::None;
         }
+        res
     }
     pub fn parse(tokens: Vec<Token>) -> Result<Module, BoError>{
         let mut parser = Parser{
